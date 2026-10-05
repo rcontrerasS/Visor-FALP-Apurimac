@@ -1,0 +1,18 @@
+{
+  "version": "1.0-apurimac-mobile",
+  "source": "Muestra_Apurimac.xlsx",
+  "records": 25,
+  "principal": 20,
+  "alternativa": 5,
+  "layers": [
+    "Esri WorldStreetMap",
+    "Esri Satélite",
+    "Esri Híbrido"
+  ],
+  "marker_color_logic": {
+    "PRINCIPAL": "red",
+    "ALTERNATIVA": "blue"
+  },
+  "credit": "Ronald Contreras",
+  "utm_crs": "EPSG:32718"
+}

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0f172a">
+<title>Visor Muestra Apurímac - Supervisión ALP</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+html,body,#map{width:100%;height:100%;margin:0;padding:0}
+body{font-family:Arial,Helvetica,sans-serif;background:#e5e7eb}
+#map{position:absolute;inset:0}
+.leaflet-container{font-size:13px}
+
+.leaflet-control-layers{
+  border-radius:10px!important;
+  box-shadow:0 3px 14px rgba(0,0,0,.22)!important;
+  border:1px solid #d1d5db!important;
+}
+.leaflet-control-layers-expanded{
+  padding:8px 10px!important;
+  min-width:165px;
+  max-width:205px;
+  font-size:12px;
+}
+
+.mobile-toolbar{
+  position:fixed;z-index:1001;left:50%;bottom:44px;
+  transform:translateX(-50%);pointer-events:none;
+}
+.route-main{
+  pointer-events:auto;min-width:185px;height:48px;border:2px solid #fff;border-radius:24px;
+  padding:0 18px;background:#166534;color:#fff;box-shadow:0 5px 18px rgba(0,0,0,.30);
+  font-weight:900;font-size:12px;cursor:pointer;
+}
+.route-main:disabled{opacity:.78;cursor:wait}
+.route-main:active{transform:scale(.98)}
+
+.route-info{
+  position:fixed;z-index:1001;left:50%;bottom:103px;transform:translateX(-50%);
+  max-width:82vw;background:rgba(15,23,42,.94);color:#fff;padding:7px 10px;border-radius:9px;
+  box-shadow:0 3px 12px rgba(0,0,0,.25);font-size:10px;font-weight:700;text-align:center;display:none;
+}
+
+/* Globos: PRINCIPAL rojo / ALTERNATIVA azul */
+.pin-wrap{position:relative;width:38px;height:45px}
+.pin-balloon{
+  position:absolute;left:3px;top:1px;width:32px;height:32px;border-radius:50% 50% 50% 0;
+  transform:rotate(-45deg);border:3px solid #fff;
+  box-shadow:0 0 0 2px rgba(15,23,42,.45),0 3px 10px rgba(0,0,0,.28);
+}
+.pin-balloon.principal{background:#ef4444}
+.pin-balloon.alternativa{background:#2563eb}
+.pin-num{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  transform:rotate(45deg);color:#fff;font-weight:900;font-size:10px;
+}
+
+.me-marker{
+ width:22px;height:22px;border-radius:50%;background:#16a34a;border:4px solid white;
+ box-shadow:0 0 0 3px rgba(22,163,74,.38),0 2px 8px rgba(0,0,0,.3)
+}
+
+.popup-card{min-width:225px;max-width:290px}
+.popup-title{font-size:14px;font-weight:900;color:#0f172a;margin-bottom:5px}
+.popup-system{font-size:11px;color:#475569;margin-bottom:7px}
+.popup-grid{display:grid;grid-template-columns:auto 1fr;gap:3px 8px;font-size:10px;line-height:1.35}
+.popup-grid .k{color:#64748b}
+.popup-grid .v{font-weight:700;color:#1f2937}
+.priority-alta{color:#b91c1c!important}
+.priority-normal{color:#1d4ed8!important}
+.popup-metric{
+ margin-top:7px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;
+ padding:6px 7px;font-size:9px;line-height:1.35;color:#334155;
+}
+.popup-actions{display:flex;gap:6px;margin-top:8px}
+.popup-actions a{
+ text-decoration:none;border-radius:7px;padding:6px 8px;font-size:10px;font-weight:800;
+}
+.gmaps{background:#0f172a;color:#fff}
+.route-one{background:#166534;color:#fff}
+
+.sed-tooltip{
+ background:rgba(255,255,255,.96)!important;border:1px solid #cbd5e1!important;
+ border-radius:6px!important;box-shadow:0 2px 7px rgba(0,0,0,.18)!important;
+ color:#0f172a!important;font-size:10px!important;font-weight:800!important;padding:4px 6px!important;
+}
+.sed-tooltip:before{display:none!important}
+
+.credit{
+  position:fixed;z-index:1000;right:8px;bottom:6px;
+  background:rgba(255,255,255,.88);color:#475569;border-radius:6px;
+  padding:3px 6px;font-size:8px;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.12);
+  pointer-events:none;
+}
+
+@media(max-width:760px){
+  .mobile-toolbar{bottom:36px}
+  .route-main{min-width:190px;height:48px;font-size:12px}
+  .leaflet-top.leaflet-right{top:6px;right:6px}
+  .leaflet-control-layers-expanded{max-height:42vh;overflow:auto;max-width:190px}
+  .leaflet-control-zoom{margin-top:7px!important;margin-left:7px!important}
+  .credit{right:6px;bottom:5px;font-size:7px}
+}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="mobile-toolbar">
+  <button class="route-main" id="routeAllBtn" onclick="routeAll()">🧭 Ruta sugerida</button>
+</div>
+<div class="route-info" id="routeInfo"></div>
+<div class="credit">Creado por Ronald Contreras</div>
+
+<script>
+const DATA=[{"n":1,"departamento":"APURÍMAC","sistema":"ABANCAY RURAL","sed":"1000190","consumo_p1":215.0,"promedio":6937.833333333333,"diferencia":6722.833333333333,"desviacion":3126.899224806201,"utm_este":718859.0,"utm_norte":8464917.01,"cod_sistema":"SE0241","sector_tipico":"4","prioridad":"ALTA","tipo_muestra":"PRINCIPAL","criterio":"ALTA DESVIACIÓN","lat":-13.877287740723911,"lon":-72.97480073713673},{"n":2,"departamento":"APURÍMAC","sistema":"ABANCAY RURAL","sed":"1000659","consumo_p1":86.0,"promedio":2423.5,"diferencia":2337.5,"desviacion":2718.023255813954,"utm_este":716444.22,"utm_norte":8457024.16,"cod_sistema":"SE0241","sector_tipico":"4","prioridad":"ALTA","tipo_muestra":"PRINCIPAL","criterio":"ALTA DESVIACIÓN","lat":-13.948795551111889,"lon":-72.9965219607911},{"n":3,"departamento":"APURÍMAC","sistema":"ANDAHUAYLAS","sed":"1010243","consumo_p1":202.0,"promedio":3976.833333333333,"diferencia":3774.833333333333,"desviacion":1868.729372937294,"utm_este":663006.0,"utm_norte":8489188.99,"cod_sistema":"SE0042","sector_tipico":"4","prioridad":"ALTA","tipo_muestra":"PRINCIPAL","criterio":"ALEATORIA DIRIGIDA / PROXIMIDAD","lat":-13.66162810904109,"lon":-73.49289099816697},{"n":4,"departamento":"APURÍMAC","sistema":"ANDAHUAYLAS","sed":"1010917","consumo_p1":172.0,"promedio":1149.166666666667,"diferencia":977.1666666666667,"desviacion":568.1201550387598,"utm_este":641235.16,"utm_norte":8505018.67,"cod_sistema":"SE0042","sector_tipico":"4","prioridad":"ALTA","tipo_muestra":"PRINCIPAL","criterio":"ALTA DESVIACIÓN","lat":-13.519670103288309,"lon":-73.69492180148889},{"n":5,"departamento":"APURÍMAC","sistema":"ANDAHUAYLAS","sed":"1010148","consumo_p1":366.0,"promedio":1040.833333333333,"diferencia":674.8333333333333,"desviacion":184.3806921675774,"utm_este":659445.12,"utm_norte":8478869.97,"cod_sistema":"SE0042","sector_tipico":"4","prioridad":"ALTA","tipo_muestra":"PRINCIPAL","criterio":"ALTA DESVIACIÓN","lat":-13.755101628019123,"lon":-73.52522415949115},{"n":6,"departamento":"APURÍMAC","sistema":"CHACAPUENTE","sed":"1000474","consumo_p1":22.0,"promedio":59.0,"diferencia":37.0,"desviacion":168.1818181818182,"utm_este":705809.34,"utm_norte":8429752.44,"cod_sistema":"SE1042","sector_tipico":"4","prioridad":"ALTA","tipo_muestra":"PRINCIPAL","criterio":"ALTA DESVIACIÓN","lat":-14.196038134761126,"lon":-73.09287916201569},{"n":7,"departamento":"APURÍMAC","sistema":"ANDAHUAYLAS","sed":"1010873","consumo_p1":1543.0,"promedio":2352.833333333333,"diferencia":809.8333333333335,"desviacion":52.48433786995032,"utm_este":674862.28,"utm_norte":8489258.35,"cod_sistema":"SE0042","sector_tipico":"4","prioridad":"NORMAL","tipo_muestra":"PRINCIPAL","criterio":"ALEATORIA DIRIGIDA / PROXIMIDAD","lat":-13.660311029944173,"lon":-73.38330518491941},{"n":8,"departamento":"APURÍMAC","sistema":"ANDAHUAYLAS","sed":"1010795","consumo_p1":314.0,"promedio":472.8333333333333,"diferencia":158.8333333333333,"desviacion":50.58386411889596,"utm_este":674735.0,"utm_norte":8490369.0,"cod_sistema":"SE0042","sector_tipico":"4","prioridad":"NORMAL","tipo_muestra":"PRINCIPAL","criterio":"ALEATORIA DIRIGIDA / PROXIMIDAD","lat":-13.650279935313046,"lon":-73.384549974359},{"n":9,"departamento":"APURÍMAC","sistema":"ANDAHUAYLAS","sed":"1010150","consumo_p1":202.0,"promedio":295.8333333333333,"diferencia":93.83333333333331,"desviacion":46.45214521452144,"utm_este":651797.0,"utm_norte":8475939.0,"cod_sistema":"SE0042","sector_tipico":"4","prioridad":"NORMAL","tipo_muestra":"PRINCIPAL","criterio":"ALEATORIA DIRIGIDA / PROXIMIDAD","lat":-13.78200900571988,"lon":-73.5957913226465},{"n":10,"departamento":"APURÍMAC","sistema":"ANDAHUAYLAS","sed":"1010568","consumo_p1":284.0,"promedio":388.6666666666667,"diferencia":104.6666666666667,"desviacion":36.85446009389672,"utm_este":644711.55,"utm_norte":8503063.56,"cod_sistema":"SE0042","sector_tipico":"4","prioridad":"NORMAL","tipo_muestra":"PRINCIPAL","criterio":"ALEATORIA DIRIGIDA / PROXIMIDAD","lat":-13.537174600304606,"lon":-73.66270582440544},{"n":11,"departamento":"APURÍMAC","sistema":"CHACAPUENTE","sed":"1000902","consumo_p1":495.0,"promedio":673.6666666666666,"diferencia":178.6666666666666,"desviacion":36.09427609427608,"utm_este":691344.0,"utm_norte":8447367.0,"cod_sistema":"SE1042","sector_tipico":"4","prioridad":"NORMAL","tipo_muestra":"PRINCIPAL","criterio":"ALEATORIA DIRIGIDA / PROXIMIDAD","lat":-14.037875559351894,"lon":-73.22810531014748},{"n":12,"departamento":"APURÍMAC","sistema":"ABANCAY RURAL","sed":"1000200","consumo_p1":43.0,"promedio":57.33333333333334,"diferencia":14.33333333333334,"desviacion":33.33333333333334,"utm_este":705204.5,"utm_norte":8458042.58,"cod_sistema":"SE0241","sector_tipico":"4","prioridad":"NORMAL","tipo_muestra":"PRINCIPAL","criterio":"ALEATORIA DIRIGIDA / PROXIMIDAD","lat":-13.940426323245571,"lon":-73.10059410483646},{"n":13,"departamento":"APURÍMAC","sistema":"ANDAHUAYLAS","sed":"1010765","consumo_p1":271.0,"promedio":355.6666666666667,"diferencia":84.66666666666669,"desviacion":31.24231242312424,"utm_este":670822.38,"utm_norte":8488346.92,"cod_sistema":"SE0042","sector_tipico":"4","prioridad":"NORMAL","tipo_muestra":"PRINCIPAL","criterio":"ALEATORIA DIRIGIDA / PROXIMIDAD","lat":-13.668789839524225,"lon":-73.42059117119435},{"n":14,"departamento":"APURÍMAC","sistema":"ABANCAY RURAL","sed":"1000747","consumo_p1":215.0,"promedio":274.3333333333333,"diferencia":59.33333333333331,"desviacion":27.59689922480619,"utm_este":707684.0,"utm_norte":8453800.0,"cod_sistema":"SE0241","sector_tipico":"4","prioridad":"NORMAL","tipo_muestra":"PRINCIPAL","criterio":"ALEATORIA DIRIGIDA / PROXIMIDAD","lat":-13.978586023132973,"lon":-73.07733467569699},{"n":15,"departamento":"APURÍMAC","sistema":"ANDAHUAYLAS","sed":"1010081","consumo_p1":715.0,"promedio":825.6666666666666,"diferencia":110.6666666666666,"desviacion":15.47785547785547,"utm_este":670326.11,"utm_norte":8488924.42,"cod_sistema":"SE0042","sector_tipico":"4","prioridad":"NORMAL","tipo_muestra":"PRINCIPAL","criterio":"ALEATORIA DIRIGIDA / PROXIMIDAD","lat":-13.663599113577366,"lon":-73.42521308496418},{"n":16,"departamento":"APURÍMAC","sistema":"ABANCAY RURAL","sed":"1000834","consumo_p1":172.0,"promedio":196.0,"diferencia":24.0,"desviacion":13.95348837209302,"utm_este":723611.0,"utm_norte":8508190.0,"cod_sistema":"SE0241","sector_tipico":"4","prioridad":"NORMAL","tipo_muestra":"PRINCIPAL","criterio":"ALEATORIA DIRIGIDA / PROXIMIDAD","lat":-13.485891445486311,"lon":-72.93426303260564},{"n":17,"departamento":"APURÍMAC","sistema":"ANDAHUAYLAS","sed":"1010161","consumo_p1":108.0,"promedio":361.6666666666667,"diferencia":253.6666666666667,"desviacion":234.8765432098765,"utm_este":645365.56,"utm_norte":8462579.46,"cod_sistema":"SE0042","sector_tipico":"4","prioridad":"ALTA","tipo_muestra":"ALTERNATIVA","criterio":"ALTERNATIVA / PROXIMIDAD","lat":-13.903106313734122,"lon":-73.65457961592644},{"n":18,"departamento":"APURÍMAC","sistema":"ANDAHUAYLAS","sed":"1010489","consumo_p1":202.0,"promedio":412.6666666666667,"diferencia":210.6666666666667,"desviacion":104.2904290429043,"utm_este":637385.0,"utm_norte":8502565.0,"cod_sistema":"SE0042","sector_tipico":"4","prioridad":"NORMAL","tipo_muestra":"PRINCIPAL","criterio":"ALTERNATIVA / PROXIMIDAD","lat":-13.54203439141288,"lon":-73.73037524865113},{"n":19,"departamento":"APURÍMAC","sistema":"ANDAHUAYLAS","sed":"1011093","consumo_p1":693.0,"promedio":865.3333333333334,"diferencia":172.3333333333334,"desviacion":24.86772486772487,"utm_este":671285.06,"utm_norte":8489687.42,"cod_sistema":"SE0042","sector_tipico":"4","prioridad":"NORMAL","tipo_muestra":"PRINCIPAL","criterio":"ALTERNATIVA / PROXIMIDAD","lat":-13.656646080989649,"lon":-73.41639534195171},{"n":20,"departamento":"APURÍMAC","sistema":"ANDAHUAYLAS","sed":"1010175","consumo_p1":254.0,"promedio":285.8333333333333,"diferencia":31.83333333333331,"desviacion":12.53280839895012,"utm_este":672925.15,"utm_norte":8490415.55,"cod_sistema":"SE0042","sector_tipico":"4","prioridad":"NORMAL","tipo_muestra":"PRINCIPAL","criterio":"ALTERNATIVA / PROXIMIDAD","lat":-13.649967497138471,"lon":-73.40128049533762},{"n":21,"departamento":"APURÍMAC","sistema":"ABANCAY","sed":"1000047","consumo_p1":1443.0,"promedio":1590.166666666667,"diferencia":147.1666666666667,"desviacion":10.1986601986602,"utm_este":729468.54,"utm_norte":8492033.1,"cod_sistema":"SE0035","sector_tipico":"2","prioridad":"NORMAL","tipo_muestra":"PRINCIPAL","criterio":"ALTERNATIVA / PROXIMIDAD","lat":-13.631435615941317,"lon":-72.87888106849171},{"n":22,"departamento":"APURÍMAC","sistema":"ANDAHUAYLAS","sed":"1010167","consumo_p1":151.0,"promedio":744.1666666666666,"diferencia":593.1666666666666,"desviacion":392.8256070640177,"utm_este":636211.0,"utm_norte":8463616.0,"cod_sistema":"SE0042","sector_tipico":"4","prioridad":"ALTA","tipo_muestra":"ALTERNATIVA","criterio":"ALTA DESVIACIÓN","lat":-13.894188437530044,"lon":-73.73934465173096},{"n":23,"departamento":"APURÍMAC","sistema":"ANDAHUAYLAS","sed":"1010216","consumo_p1":469.0,"promedio":527.0,"diferencia":58.0,"desviacion":12.36673773987207,"utm_este":656720.84,"utm_norte":8509028.68,"cod_sistema":"SE0042","sector_tipico":"4","prioridad":"NORMAL","tipo_muestra":"ALTERNATIVA","criterio":"ALEATORIA DIRIGIDA / PROXIMIDAD","lat":-13.48263537175534,"lon":-73.55207628342052},{"n":24,"departamento":"APURÍMAC","sistema":"SER APURIMAC","sed":"1000995","consumo_p1":65.0,"promedio":72.83333333333333,"diferencia":7.833333333333329,"desviacion":12.05128205128204,"utm_este":753689.98,"utm_norte":8432526.98,"cod_sistema":"SR0038","sector_tipico":"7","prioridad":"NORMAL","tipo_muestra":"ALTERNATIVA","criterio":"ALEATORIA DIRIGIDA / PROXIMIDAD","lat":-14.16702892667825,"lon":-72.64969451728274},{"n":25,"departamento":"APURÍMAC","sistema":"CHACAPUENTE","sed":"1010340","consumo_p1":908.0,"promedio":1016.0,"diferencia":108.0,"desviacion":11.8942731277533,"utm_este":650565.03,"utm_norte":8438867.4,"cod_sistema":"SE1042","sector_tipico":"4","prioridad":"NORMAL","tipo_muestra":"ALTERNATIVA","criterio":"ALEATORIA DIRIGIDA / PROXIMIDAD","lat":-14.117176683115774,"lon":-73.6051728106236}];
+
+const map=L.map('map',{
+  center:[-13.65,-73.1],
+  zoom:8,
+  zoomControl:true,
+  preferCanvas:true
+});
+
+// SOLO ESRI
+const esriStreet=L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+  {minZoom:0,maxZoom:20,maxNativeZoom:18,attribution:'Esri'}
+).addTo(map);
+
+const esriSat=L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  {minZoom:0,maxZoom:21,maxNativeZoom:19,attribution:'Esri World Imagery'}
+);
+
+const esriLabels=L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+  {minZoom:0,maxZoom:21,maxNativeZoom:19,attribution:'Esri'}
+);
+
+const esriHybrid=L.layerGroup([esriSat,esriLabels]);
+
+L.control.layers(
+  {
+    'Esri WorldStreetMap':esriStreet,
+    'Esri Satélite':esriSat,
+    'Esri Híbrido':esriHybrid
+  },
+  null,
+  {position:'topright',collapsed:true,autoZIndex:true}
+).addTo(map);
+
+L.control.scale({imperial:false,position:'bottomleft'}).addTo(map);
+
+let myLocation=null;
+let myMarker=null;
+let accuracyCircle=null;
+let routeLayer=null;
+
+function esc(t){
+  return String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmt(n,d=1){
+  return Number(n).toLocaleString('es-PE',{minimumFractionDigits:d,maximumFractionDigits:d});
+}
+function pinIcon(s){
+  const tipo=(s.tipo_muestra||'').toUpperCase()==='ALTERNATIVA'?'alternativa':'principal';
+  return L.divIcon({
+    className:'',
+    html:`<div class="pin-wrap"><div class="pin-balloon ${tipo}"><span class="pin-num">${s.n}</span></div></div>`,
+    iconSize:[38,45],iconAnchor:[19,43],popupAnchor:[0,-40]
+  });
+}
+function googleUrl(s){
+  if(myLocation){
+    return `https://www.google.com/maps/dir/?api=1&origin=${myLocation.lat},${myLocation.lon}&destination=${s.lat},${s.lon}&travelmode=driving`;
+  }
+  return `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}&travelmode=driving`;
+}
+function popupHTML(s){
+  const pclass=s.prioridad==='ALTA'?'priority-alta':'priority-normal';
+  return `<div class="popup-card">
+    <div class="popup-title">SED ${esc(s.sed)}</div>
+    <div class="popup-system">${esc(s.sistema)} · ${esc(s.cod_sistema)}</div>
+    <div class="popup-grid">
+      <span class="k">Muestra</span><span class="v">${esc(s.tipo_muestra)}</span>
+      <span class="k">Prioridad</span><span class="v ${pclass}">${esc(s.prioridad)}</span>
+      <span class="k">Desviación</span><span class="v">${fmt(s.desviacion,1)} %</span>
+      <span class="k">Criterio</span><span class="v">${esc(s.criterio)}</span>
+    </div>
+    <div class="popup-metric">
+      <b>P1 teórico:</b> ${fmt(s.consumo_p1,0)} kWh &nbsp;·&nbsp;
+      <b>Promedio medido:</b> ${fmt(s.promedio,1)} kWh
+    </div>
+    <div class="popup-actions">
+      <a class="route-one" href="#" onclick="event.preventDefault();routeTo('${s.sed}')">Ruta</a>
+      <a class="gmaps" target="_blank" href="${googleUrl(s)}">Google Maps</a>
+    </div>
+  </div>`;
+}
+
+DATA.forEach(s=>{
+  L.marker([s.lat,s.lon],{icon:pinIcon(s)})
+    .addTo(map)
+    .bindPopup(popupHTML(s),{maxWidth:310})
+    .bindTooltip(`SED ${s.sed} · ${s.sistema}`,{className:'sed-tooltip',sticky:true});
+});
+
+const bounds=L.latLngBounds(DATA.map(s=>[s.lat,s.lon]));
+map.fitBounds(bounds,{padding:[35,35]});
+
+function ensureLocation(cb){
+  if(myLocation){cb();return}
+  if(!navigator.geolocation){
+    alert('Este navegador no admite geolocalización.');
+    return;
+  }
+  const btn=document.getElementById('routeAllBtn');
+  if(btn){btn.disabled=true;btn.textContent='📍 Obteniendo ubicación...';}
+  navigator.geolocation.getCurrentPosition(pos=>{
+    myLocation={lat:pos.coords.latitude,lon:pos.coords.longitude};
+    if(myMarker)map.removeLayer(myMarker);
+    if(accuracyCircle)map.removeLayer(accuracyCircle);
+    myMarker=L.marker([myLocation.lat,myLocation.lon],{
+      icon:L.divIcon({className:'',html:'<div class="me-marker"></div>',iconSize:[22,22],iconAnchor:[11,11]})
+    }).addTo(map).bindTooltip('Mi ubicación');
+    accuracyCircle=L.circle([myLocation.lat,myLocation.lon],{
+      radius:pos.coords.accuracy,color:'#16a34a',weight:1,fillOpacity:.05
+    }).addTo(map);
+    if(btn){btn.disabled=false;btn.textContent='🧭 Ruta sugerida';}
+    cb();
+  },()=>{
+    if(btn){btn.disabled=false;btn.textContent='🧭 Ruta sugerida';}
+    alert('No se pudo obtener tu ubicación. Abre el visor desde GitHub Pages y permite el acceso a ubicación.');
+  },{enableHighAccuracy:true,timeout:15000,maximumAge:3000});
+}
+
+async function fetchRoute(points){
+  const coords=points.map(p=>`${p.lon},${p.lat}`).join(';');
+  const url=`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(),15000);
+  try{
+    const res=await fetch(url,{signal:ctrl.signal});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const obj=await res.json();
+    if(!obj.routes||!obj.routes.length)throw new Error('Sin ruta');
+    return obj.routes[0];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+function showRouteInfo(txt){
+  const el=document.getElementById('routeInfo');
+  el.textContent=txt;el.style.display='block';
+}
+function clearRoute(){
+  if(routeLayer){map.removeLayer(routeLayer);routeLayer=null}
+  document.getElementById('routeInfo').style.display='none';
+}
+async function drawRoute(points,label){
+  clearRoute();
+  try{
+    const r=await fetchRoute(points);
+    routeLayer=L.geoJSON(r.geometry,{style:{color:'#16a34a',weight:5,opacity:.9}}).addTo(map);
+    map.fitBounds(routeLayer.getBounds(),{padding:[35,35]});
+    const km=(r.distance/1000).toFixed(1);
+    const min=Math.round(r.duration/60);
+    showRouteInfo(`${label} · ${km} km · ${min} min aprox.`);
+  }catch(e){
+    routeLayer=L.polyline(points.map(p=>[p.lat,p.lon]),{color:'#f59e0b',weight:4,dashArray:'8 7'}).addTo(map);
+    map.fitBounds(routeLayer.getBounds(),{padding:[35,35]});
+    showRouteInfo('Ruta vial no disponible; se muestra referencia directa.');
+  }
+}
+function routeTo(sed){
+  const s=DATA.find(x=>x.sed===sed);
+  if(!s)return;
+  ensureLocation(()=>drawRoute([myLocation,s],`Ruta a SED ${s.sed}`));
+}
+function hav(a,b){
+  const R=6371008.8,rad=x=>x*Math.PI/180;
+  const p1=rad(a.lat),p2=rad(b.lat),dp=rad(b.lat-a.lat),dl=rad(b.lon-a.lon);
+  const z=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return 2*R*Math.asin(Math.sqrt(z));
+}
+function routeAll(){
+  ensureLocation(()=>{
+    let cur=myLocation;
+    const pending=[...DATA];
+    const order=[];
+    while(pending.length){
+      let bi=0,bd=Infinity;
+      pending.forEach((s,i)=>{
+        const d=hav(cur,s);
+        if(d<bd){bd=d;bi=i}
+      });
+      const s=pending.splice(bi,1)[0];
+      order.push(s);
+      cur=s;
+    }
+    drawRoute([myLocation,...order],`Ruta sugerida · ${DATA.length} SED`);
+  });
+}
+</script>
+</body>
+</html>
